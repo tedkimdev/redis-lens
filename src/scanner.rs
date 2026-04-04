@@ -1,3 +1,4 @@
+use redis::AsyncCommands;
 use std::collections::HashMap;
 
 pub struct KeyInfo {
@@ -13,6 +14,7 @@ pub struct ExpiryBucket {
 
 pub async fn scan_keys(
     con: &mut redis::aio::MultiplexedConnection,
+    sample_rate: f64,
 ) -> Result<Vec<KeyInfo>, Box<dyn std::error::Error>> {
     let mut cursor: u64 = 0;
     let mut results: Vec<KeyInfo> = Vec::new();
@@ -26,7 +28,15 @@ pub async fn scan_keys(
             .await?;
 
         for key in &keys {
-            let ttl_ms: i64 = redis::cmd("PTTL").arg(key).query_async(con).await?;
+            // skip based on sample rate
+            if rand::random::<f64>() > sample_rate {
+                continue;
+            }
+
+            let ttl_ms: i64 = redis::cmd("PTTL")
+                .arg(key)
+                .query_async(con)
+                .await?;
 
             results.push(KeyInfo {
                 name: key.clone(),
