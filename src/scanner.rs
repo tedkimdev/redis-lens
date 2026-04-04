@@ -8,6 +8,7 @@ pub struct KeyInfo {
 pub struct ExpiryBucket {
     pub window_start_sec: u64,
     pub count: usize,
+    pub keys: Vec<String>,
 }
 
 pub async fn scan_keys(
@@ -25,10 +26,7 @@ pub async fn scan_keys(
             .await?;
 
         for key in &keys {
-            let ttl_ms: i64 = redis::cmd("PTTL")
-                .arg(key)
-                .query_async(con)
-                .await?;
+            let ttl_ms: i64 = redis::cmd("PTTL").arg(key).query_async(con).await?;
 
             results.push(KeyInfo {
                 name: key.clone(),
@@ -46,25 +44,26 @@ pub async fn scan_keys(
 }
 
 pub fn analyze_expiry(keys: &[KeyInfo], bucket_size_sec: u64) -> Vec<ExpiryBucket> {
-    let mut buckets: HashMap<u64, usize> = HashMap::new();
+    let mut buckets: HashMap<u64, ExpiryBucket> = HashMap::new();
 
     for key in keys {
         match key.ttl_ms {
             ms if ms > 0 => {
                 let sec = (ms / 1000) as u64;
-                let bucket = (sec / bucket_size_sec) * bucket_size_sec;
-                *buckets.entry(bucket).or_insert(0) += 1;
-            },
+                let window = (sec / bucket_size_sec) * bucket_size_sec;
+                let bucket = buckets.entry(window).or_insert(ExpiryBucket {
+                    window_start_sec: window,
+                    count: 0,
+                    keys: Vec::new(),
+                });
+                bucket.count += 1;
+                bucket.keys.push(key.name.clone());
+            }
             _ => {}
         }
     }
 
-    let mut result: Vec<ExpiryBucket> = buckets
-        .into_iter()
-        .map(|(window_start_sec, count)| ExpiryBucket { window_start_sec, count })
-        .collect();
-
-
+    let mut result: Vec<ExpiryBucket> = buckets.into_values().collect();
     result.sort_by_key(|b| b.window_start_sec);
     result
 }
