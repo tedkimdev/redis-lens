@@ -28,6 +28,10 @@ struct Args {
 
     #[arg(long, default_value = "text")]
     output: String,
+
+    /// Only scan keys matching this pattern (e.g. user:*)
+    #[arg(long)]
+    pattern: Option<String>,
 }
 
 #[tokio::main]
@@ -37,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = redis::Client::open(args.url)?;
     let mut con = client.get_multiplexed_async_connection().await?;
     
-    let keys = scanner::scan_keys(&mut con, args.sample).await?;
+    let keys = scanner::scan_keys(&mut con, args.sample, args.pattern.as_deref()).await?;
     let buckets = scanner::analyze_expiry(&keys, 60);
     let score = scanner::risk_score(&buckets, keys.len());
 

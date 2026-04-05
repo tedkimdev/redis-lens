@@ -18,17 +18,20 @@ pub struct ExpiryBucket {
 pub async fn scan_keys(
     con: &mut redis::aio::MultiplexedConnection,
     sample_rate: f64,
+    pattern: Option<&str>,
 ) -> Result<Vec<KeyInfo>, Box<dyn std::error::Error>> {
     let mut cursor: u64 = 0;
     let mut results: Vec<KeyInfo> = Vec::new();
 
     loop {
-        let (next_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
-            .arg(cursor)
-            .arg("COUNT")
-            .arg(100)
-            .query_async(con)
-            .await?;
+        let mut cmd = redis::cmd("SCAN");
+        cmd.arg(cursor).arg("COUNT").arg(100);
+
+        if let Some(p) = pattern {
+            cmd.arg("MATCH").arg(p);
+        }
+        
+        let (next_cursor, keys): (u64, Vec<String>) = cmd.query_async(con).await?;
 
         for key in &keys {
             // skip based on sample rate
