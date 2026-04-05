@@ -2,6 +2,14 @@ mod scanner;
 
 use clap::Parser;
 use colored::Colorize;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Output {
+    risk_score: u8,
+    total_keys: usize,
+    buckets: Vec<scanner::ExpiryBucket>,
+}
 
 #[derive(Parser)]
 #[command(name = "redis-lens", about = "Redis stampede risk analyzer")]
@@ -17,6 +25,9 @@ struct Args {
     /// Sample rate (0.0 ~ 1.0)
     #[arg(long, default_value_t = 1.0)]
     sample: f64,
+
+    #[arg(long, default_value = "text")]
+    output: String,
 }
 
 #[tokio::main]
@@ -29,6 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let keys = scanner::scan_keys(&mut con, args.sample).await?;
     let buckets = scanner::analyze_expiry(&keys, 60);
     let score = scanner::risk_score(&buckets, keys.len());
+
+    if args.output == "json" {
+        let out = Output {
+            risk_score: score,
+            total_keys: keys.len(),
+            buckets,
+        };
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
 
     let max_count = buckets.iter().map(|b| b.count).max().unwrap_or(1);
 
