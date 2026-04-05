@@ -14,8 +14,8 @@ struct Output {
 #[derive(Parser)]
 #[command(name = "redis-lens", about = "Redis stampede risk analyzer")]
 struct Args {
-    /// Redis connection URL
-    #[arg(long, default_value = "redis://127.0.0.1/")]
+    /// Redis connection URL (or set REDIS_URL env var)
+    #[arg(long, env = "REDIS_URL", default_value = "redis://127.0.0.1/")]
     url: String,
 
     /// Bucket size in seconds
